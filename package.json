@@ -3,7 +3,9 @@
   "version": "1.0.0",
   "description": "This project sets up a containerized CMS (System Under Test) and an automated test suite\r using Playwright to verify the core blog functionality.",
   "main": "index.js",
-  "scripts": {},
+  "scripts": {
+    "test": "playwright test"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/nejcselan19/gamanza-qa-automation-challenge.git"
