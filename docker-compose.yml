@@ -1,0 +1,96 @@
+services:
+  db:
+    image: mysql:8.0
+    container_name: qa_wordpress_db
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: wp_db
+      MYSQL_USER: wp_user
+      MYSQL_PASSWORD: wp_pass
+      MYSQL_ROOT_PASSWORD: root_pass
+    volumes:
+      - db_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot_pass"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  wordpress:
+    image: wordpress:latest
+    container_name: qa_wordpress_app
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8080:80"
+    environment:
+      WORDPRESS_DB_HOST: db:3306
+      WORDPRESS_DB_NAME: wp_db
+      WORDPRESS_DB_USER: wp_user
+      WORDPRESS_DB_PASSWORD: wp_pass
+    volumes:
+      - wp_data:/var/www/html
+
+  wpcli:
+    image: wordpress:cli
+    container_name: qa_wordpress_cli
+    depends_on:
+      db:
+        condition: service_healthy
+      wordpress:
+        condition: service_started
+    environment:
+      WORDPRESS_DB_HOST: db:3306
+      WORDPRESS_DB_NAME: wp_db
+      WORDPRESS_DB_USER: wp_user
+      WORDPRESS_DB_PASSWORD: wp_pass
+    working_dir: /var/www/html
+    volumes:
+      - wp_data:/var/www/html
+    command: >
+      /bin/sh -c '
+        echo "Waiting for MySQL and WordPress to be ready...";
+        sleep 15;
+
+        echo "Running WordPress install if needed...";
+        if wp core is-installed --allow-root; then
+          echo "WordPress already installed, skipping core install.";
+        else
+          wp core install \
+            --path="/var/www/html" \
+            --url="http://localhost:8080" \
+            --title="QA Automation Blog" \
+            --admin_user="admin" \
+            --admin_password="admin123" \
+            --admin_email="admin@example.com" \
+            --skip-email \
+            --allow-root;
+        fi;
+
+        echo "Seeding QA Automation Challenge post if missing...";
+        POST_ID=$$(wp post list \
+          --post_type=post \
+          --title="QA Automation Challenge" \
+          --field=ID \
+          --allow-root || echo "");
+
+        if [ -z "$$POST_ID" ]; then
+          wp post create \
+            --post_title="QA Automation Challenge" \
+            --post_content="Dockerized testing is the future." \
+            --post_status=publish \
+            --allow-root;
+          echo "Post created.";
+        else
+          echo "Post already exists (ID: $$POST_ID), skipping create.";
+        fi;
+
+        echo "Seeder finished.";
+      '
+    restart: "no"
+
+volumes:
+  db_data:
+  wp_data:
